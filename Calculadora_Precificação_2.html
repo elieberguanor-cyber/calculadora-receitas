@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Receitas de Salgados</title>
+<style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 20px; background-color: #f9f9f9; }
+    h1 { text-align: center; color: #333; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, select { width: 100%; padding: 5px; margin-top: 5px; }
+    button { margin-top: 15px; padding: 10px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; }
+    button:hover { background-color: #45a049; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f4f4f4; }
+    .resultado { margin-top: 20px; font-weight: bold; }
+    .edit-btn, .delete-btn, .add-btn { cursor: pointer; color: blue; text-decoration: underline; margin: 0 5px; }
+    .section { border: 1px solid #ddd; padding: 15px; margin-top: 20px; border-radius: 8px; background-color: #fff; }
+    .recipes-list { display: none; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>Calculadora de Receitas de Salgados</h1>
+
+<div class="section">
+    <h3>Cadastro de Ingredientes</h3>
+    <label>Nome do Ingrediente</label>
+    <input type="text" id="ing_nome">
+
+    <label>Preço por unidade (R$)</label>
+    <input type="number" id="ing_preco" step="0.01">
+
+    <label>Unidade de medida</label>
+    <select id="ing_unidade">
+        <option value="g">g</option>
+        <option value="kg">kg</option>
+        <option value="ml">ml</option>
+        <option value="L">L</option>
+        <option value="xícara">xícara</option>
+        <option value="colher">colher</option>
+        <option value="unidade">unidade</option>
+    </select>
+
+    <label>Quantidade correspondente à unidade</label>
+    <input type="number" id="ing_qtd" step="0.01">
+
+    <button onclick="addIngrediente()">Adicionar Ingrediente</button>
+
+    <table id="ingredientes_table">
+        <thead>
+            <tr>
+                <th>Ingrediente</th>
+                <th>Preço/Unidade (R$)</th>
+                <th>Unidade</th>
+                <th>Qtd. da unidade</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<div class="section">
+    <h3>Cadastro de Receita</h3>
+    <label>Nome da Receita</label>
+    <input type="text" id="rec_nome">
+
+    <label>Quantidade de salgados produzidos</label>
+    <input type="number" id="rec_qtd_salgados">
+
+    <label>Peso total (g)</label>
+    <input type="number" id="rec_peso_total">
+
+    <label>Custos indiretos (%)</label>
+    <input type="number" id="rec_custos" step="0.1">
+
+    <label>Margem de lucro (%)</label>
+    <input type="number" id="rec_lucro" step="0.1">
+
+    <h4>Adicionar Ingrediente à Receita</h4>
+    <select id="select_ingredientes"></select>
+    <label>Quantidade a utilizar</label>
+    <input type="number" id="rec_ing_qtd" step="0.01">
+    <button onclick="addIngredienteReceita()">Adicionar à Receita</button>
+
+    <table id="receita_table">
+        <thead>
+            <tr>
+                <th>Ingrediente</th>
+                <th>Qtd. Usada</th>
+                <th>Unidade</th>
+                <th>Valor R$</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <button onclick="calcularReceita()">Calcular Receita</button>
+    <div class="resultado" id="resultado"></div>
+    <button onclick="salvarReceita()">💾 Salvar Receita</button>
+</div>
+
+<div class="section">
+    <h3 style="cursor:pointer;" onclick="toggleReceitas()">📂 Receitas Salvas</h3>
+    <div class="recipes-list" id="recipes_list"></div>
+</div>
+
+<script>
+let ingredientes = [];
+let receitaAtual = [];
+
+function saveStorage() {
+    localStorage.setItem('ingredientes', JSON.stringify(ingredientes));
+    localStorage.setItem('receitas', JSON.stringify(getReceitas()));
+}
+
+function loadStorage() {
+    let storedIng = JSON.parse(localStorage.getItem('ingredientes'));
+    if(storedIng) ingredientes = storedIng;
+    let receitas = getReceitas();
+    receitas.forEach(r => addRecipeToList(r));
+    atualizarTabelaIngredientes();
+    atualizarSelectIngredientes();
+}
+
+function getReceitas() {
+    let r = JSON.parse(localStorage.getItem('receitas'));
+    return r ? r : [];
+}
+
+// --- Ingredientes ---
+function addIngrediente(){
+    let nome = document.getElementById('ing_nome').value.trim();
+    let preco = parseFloat(document.getElementById('ing_preco').value);
+    let unidade = document.getElementById('ing_unidade').value;
+    let qtd = parseFloat(document.getElementById('ing_qtd').value);
+
+    if(nome && preco>0 && qtd>0){
+        ingredientes.push({nome, preco, unidade, qtd});
+        document.getElementById('ing_nome').value='';
+        document.getElementById('ing_preco').value='';
+        document.getElementById('ing_qtd').value='';
+        atualizarTabelaIngredientes();
+        atualizarSelectIngredientes();
+        saveStorage();
+    } else { alert("Preencha todos os campos corretamente."); }
+}
+
+function atualizarTabelaIngredientes(){
+    const tbody = document.querySelector('#ingredientes_table tbody');
+    tbody.innerHTML='';
+    ingredientes.forEach((ing,index)=>{
+        tbody.innerHTML += `<tr>
+            <td>${ing.nome}</td>
+            <td>${ing.preco.toFixed(2)}</td>
+            <td>${ing.unidade}</td>
+            <td>${ing.qtd}</td>
+            <td>
+                <span class="edit-btn" onclick="editarIngrediente(${index})">Editar</span>
+                <span class="delete-btn" onclick="removerIngrediente(${index})">Excluir</span>
+            </td>
+        </tr>`;
+    });
+}
+
+function atualizarSelectIngredientes(){
+    const select = document.getElementById('select_ingredientes');
+    select.innerHTML='';
+    ingredientes.forEach((ing,index)=>{
+        select.innerHTML += `<option value="${index}">${ing.nome}</option>`;
+    });
+}
+
+function editarIngrediente(index){
+    let ing = ingredientes[index];
+    let nome = prompt("Nome:", ing.nome);
+    let preco = parseFloat(prompt("Preço:", ing.preco));
+    let unidade = prompt("Unidade:", ing.unidade);
+    let qtd = parseFloat(prompt("Qtd. unidade:", ing.qtd));
+    if(nome && preco>0 && qtd>0){
+        ingredientes[index]={nome, preco, unidade, qtd};
+        atualizarTabelaIngredientes();
+        atualizarSelectIngredientes();
+        saveStorage();
+    }
+}
+
+function removerIngrediente(index){
+    if(confirm("Remover ingrediente?")){
+        ingredientes.splice(index,1);
+        atualizarTabelaIngredientes();
+        atualizarSelectIngredientes();
+        saveStorage();
+    }
+}
+
+// --- Receita ---
+function addIngredienteReceita(){
+    const sel = document.getElementById('select_ingredientes');
+    const ingIndex = parseInt(sel.value);
+    const qtdUsada = parseFloat(document.getElementById('rec_ing_qtd').value);
+    if(!qtdUsada || qtdUsada<=0) { alert("Informe a quantidade"); return; }
+    let ing = ingredientes[ingIndex];
+    // calcular valor proporcional
+    let valor = ing.preco * (qtdUsada/ing.qtd);
+    receitaAtual.push({nome: ing.nome, qtd: qtdUsada, unidade: ing.unidade, valor: valor});
+    document.getElementById('rec_ing_qtd').value='';
+    atualizarTabelaReceita();
+}
+
+function atualizarTabelaReceita(){
+    const tbody = document.querySelector('#receita_table tbody');
+    tbody.innerHTML='';
+    receitaAtual.forEach((item,index)=>{
+        tbody.innerHTML += `<tr>
+            <td>${item.nome}</td>
+            <td>${item.qtd}</td>
+            <td>${item.unidade}</td>
+            <td>${item.valor.toFixed(2)}</td>
+            <td>
+                <span class="delete-btn" onclick="removerItemReceita(${index})">Excluir</span>
+            </td>
+        </tr>`;
+    });
+}
+
+function removerItemReceita(index){
+    receitaAtual.splice(index,1);
+    atualizarTabelaReceita();
+}
+
+function calcularReceita(){
+    if(receitaAtual.length===0){ alert("Adicione ingredientes"); return; }
+    let custos = parseFloat(document.getElementById('rec_custos').value)/100 || 0;
+    let lucro = parseFloat(document.getElementById('rec_lucro').value)/100 || 0;
+    let qtdSalgados = parseInt(document.getElementById('rec_qtd_salgados').value) || 1;
+    let pesoTotal = parseFloat(document.getElementById('rec_peso_total').value) || 1;
+
+    let custoTotal = receitaAtual.reduce((total,item)=>total+item.valor,0);
+    custoTotal += custoTotal*custos;
+    custoTotal += custoTotal*lucro;
+
+    let precoUnidade = custoTotal / qtdSalgados;
+    let precoQuilo = custoTotal / (pesoTotal/1000);
+
+    document.getElementById('resultado').innerHTML =
+        `Valor total da receita: R$ ${custoTotal.toFixed(2)}<br>`+
+        `Preço por unidade: R$ ${precoUnidade.toFixed(2)}<br>`+
+        `Preço por quilo: R$ ${precoQuilo.toFixed(2)}`;
+}
+
+// --- Salvar Receita ---
+function salvarReceita(){
+    const nome = document.getElementById('rec_nome').value.trim();
+    if(!nome){ alert("Informe o nome da receita"); return; }
+    const receitas = getReceitas();
+    receitas.push({
+        nome: nome,
+        ingredientes: receitaAtual,
+        qtdSalgados: parseInt(document.getElementById('rec_qtd_salgados').value),
+        pesoTotal: parseFloat(document.getElementById('rec_peso_total').value),
+        custos: parseFloat(document.getElementById('rec_custos').value)/100 || 0,
+        lucro: parseFloat(document.getElementById('rec_lucro').value)/100 || 0
+    });
+    localStorage.setItem('receitas', JSON.stringify(receitas));
+    addRecipeToList(receitas[receitas.length-1]);
+    receitaAtual = [];
+    atualizarTabelaReceita();
+    document.getElementById('rec_nome').value='';
+    document.getElementById('rec_qtd_salgados').value='';
+    document.getElementById('rec_peso_total').value='';
+    document.getElementById('rec_custos').value='';
+    document.getElementById('rec_lucro').value='';
+    document.getElementById('resultado').innerHTML='';
+}
+
+// --- Listar Receitas ---
+function addRecipeToList(recipe){
+    const list = document.getElementById('recipes_list');
+    const div = document.createElement('div');
+    div.innerHTML = `<b>${recipe.nome}</b> - <span class="edit-btn" onclick='editarReceita("${recipe.nome}")'>Editar</span>`;
+    list.appendChild(div);
+}
+
+function toggleReceitas(){
+    const list = document.getElementById('recipes_list');
+    list.style.display = (list.style.display==='none') ? 'block' : 'none';
+}
+
+// --- Editar Receita (simples) ---
+function editarReceita(nome){
+    let receitas = getReceitas();
+    let r = receitas.find(r=>r.nome===nome);
+    if(!r) return;
+    receitaAtual = JSON.parse(JSON.stringify(r.ingredientes));
+    atualizarTabelaReceita();
+    document.getElementById('rec_nome').value = r.nome;
+    document.getElementById('rec_qtd_salgados').value = r.qtdSalgados;
+    document.getElementById('rec_peso_total').value = r.pesoTotal;
+    document.getElementById('rec_custos').value = r.custos*100;
+    document.getElementById('rec_lucro').value = r.lucro*100;
+
+    // remover a receita antiga para salvar a nova depois
+    receitas = receitas.filter(x=>x.nome!==nome);
+    localStorage.setItem('receitas', JSON.stringify(receitas));
+}
+
+loadStorage();
+</script>
+</body>
+</html>
